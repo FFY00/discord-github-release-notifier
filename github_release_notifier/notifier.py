@@ -9,11 +9,11 @@ from pathlib import Path
 __DEFAULT_FILE__ = '/root/.github_release_notifier/versions'
 
 
-def version_compare(version1, version2):
+def version_compare(check, current):
     def normalize(v):
-        return [int(x) for x in re.sub(r'([^\.0-9]+)', '', v).split(".")]
+        return int(re.sub(r'[^0-9]', "", v))
 
-    return (normalize(version1) > normalize(version2)) - (normalize(version1) < normalize(version2))
+    return normalize(check) > normalize(current)
 
 def _call_webhook(webhook, entry, logger):
     logger.info("Hook call : %s / %s" % (webhook, json.dumps(entry)))
@@ -27,14 +27,17 @@ def run(file=__DEFAULT_FILE__):
     logger = logging.getLogger(__name__)
     updated = {}
     for package in get_list():
+        logger.info("Checking %s..." % package)
         for entry in parse(package):
-            if version_compare(entry['version'], get_version(package)) > 0:
+            logger.debug("\tComparing %s with %s" % (entry['version'], get_version(package)))
+            if version_compare(entry['version'], get_version(package)):
                 database = _get_database(file)
                 database[package] = entry['version']
                 _set_database(database, file)
                 updated[package] = entry['version']
                 for webhook in get(package):
                     threading.Thread(target=_call_webhook, args=(webhook, entry, logger,)).start()
+#            return updated# TODO: Add option to only check last
     return updated
 
 
